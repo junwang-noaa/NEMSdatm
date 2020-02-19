@@ -17,12 +17,13 @@ subroutine AtmGridSetUp(grid,petCnt,gridname,tag,rc)
            integer, intent(out) :: rc
 
   ! Local variables
-  type(ESMF_Array)                 :: array2d
+  integer(kind=ESMF_KIND_I4), pointer  :: maskPtr(:,:)
 
   character(len=ESMF_MAXSTR) :: filename
   character(len=ESMF_MAXSTR) :: msgString
 
   integer :: i,j,lde,peX,peY,peList(2),localDECount
+  integer :: CLbnd(2), CUbnd(2), CCount(2), TLbnd(2), TUbnd(2), TCount(2)
   integer(kind=ESMF_KIND_I4), pointer  :: i4Ptr(:,:)
   
   integer(kind=ESMF_KIND_I4), allocatable :: cppeX(:), cppeY(:)
@@ -184,54 +185,37 @@ subroutine AtmGridSetUp(grid,petCnt,gridname,tag,rc)
   ! Add mask 
   !-------------------------------------------------------------------------------------
 
-  do lde = 0,localDECount-1
+  call ESMF_GridGetItemBounds(grid, itemflag=ESMF_GRIDITEM_MASK,   &
+       staggerloc=ESMF_STAGGERLOC_CENTER, computationalLBound=CLbnd,  &
+       computationalUBound=CUbnd, computationalCount=Ccount,  &
+       totalLBound=TLbnd, totalUBound=TUbnd, totalCount=Tcount, rc=rc)
 
-  ! retrieve a pointer for the mask
-  call ESMF_GridGetItem(grid, localDE=lde,&
-                        staggerloc=ESMF_STAGGERLOC_CENTER, &
-                        itemFlag=ESMF_GRIDITEM_MASK, &
-                        farrayPtr=i4Ptr, rc=rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
-
-  !fill the value using the landsfc mask
-  i4Ptr = 0
-   do j = lbound(i4Ptr,2),ubound(i4Ptr,2)
-    do i = lbound(i4Ptr,1),ubound(i4Ptr,1)
-     if(landsfc(i,j) .eq. 1.0)i4Ptr(i,j) = int(landsfc(i,j))
-    enddo
-   enddo
+  isc = CLbnd(1)
+  ise = CUbnd(1)
+  jsc = CLbnd(2)
+  jse = CUbnd(2)
+  print *,'in set up grid, aft get idim=',isc,ise,'jdim=',jsc,jse,'Ccount=',Ccount, &
+    't idim=',TLbnd(1), TUbnd(1), 'jdim=',TLbnd(2),TUbnd(2),'Tcount=',Tcount
 
   ! get an array from the grid to set the mask
-  call ESMF_GridGetItem(grid, &
-                        staggerloc=ESMF_STAGGERLOC_CENTER, &
-                        itemFlag=ESMF_GRIDITEM_MASK, &
-                        array=array2d, rc=rc)
+  call ESMF_GridGetItem(grid, itemflag=ESMF_GRIDITEM_MASK,   &
+                        staggerloc=ESMF_STAGGERLOC_CENTER,
+                        farrayPtr=maskPtr, rc=rc)
+  print *,'in set up grid, aft get maskPtr, rc=',rc, 'size=',size(maskPtr,1),size(maskPtr,2), &
+      'bound(maskPtr)=', LBOUND(maskPtr,1),LBOUND(maskPtr,2),UBOUND(maskPtr,1),UBOUND(maskPtr,2)
   if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
     line=__LINE__, &
     file=__FILE__)) &
     return  ! bail out
 
-  ! a pointer to the array on this DE
-  call ESMF_ArrayGet(array2d, farrayPtr=i4Ptr, localDE=lde, rc = rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
 
-  ! Set the mask value in the grid
-  call ESMF_GridSetItem(grid, &
-                        itemFlag=ESMF_GRIDITEM_MASK, &
-                        staggerloc=ESMF_STAGGERLOC_CENTER, &
-                        array=array2d, rc=rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
+$omp parallel do default(shared) private(i,j)
+  do j=jsc,jec
+    do i=isc,iec
+      maskPtr(i-isc+1,j-jsc+1) = floor(landsfc(i,j))
+    enddo
+  enddo
 
-  enddo !lde
   !-------------------------------------------------------------------------------------
   ! Write coords and mask to file
   !-------------------------------------------------------------------------------------
