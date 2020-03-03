@@ -10,6 +10,7 @@ module AtmInternalFields
 
   !from model_configure
                        integer, public :: iatm,jatm,nfhout
+                       logical, public :: extended_lmsk
        real(kind=ESMF_KIND_R8), public :: dt_atmos 
   character(len=ESMF_MAXSTR),   public :: filename_base 
   character(len=ESMF_MAXSTR),   public :: cdate0 

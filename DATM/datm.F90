@@ -28,7 +28,7 @@ module DAtm
   use AtmModel,          only : AtmInit, AtmRun, AtmFinal
 
   use AtmInternalFields, only : lPet, petCnt, dt_atmos, iatm, jatm, nfhout
-  use AtmInternalFields, only : dirpath, cdate0, filename_base
+  use AtmInternalFields, only : dirpath, cdate0, filename_base, extended_lmsk
 
   implicit none
   
@@ -327,6 +327,16 @@ module DAtm
       file=__FILE__)) &
       return  ! bail out
     write(msgString,'(a,f8.1)')'Model configure found with dt_atmos = ',dt_atmos
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+
+    call ESMF_ConfigGetAttribute(config=cf, &
+                                 value=extended_lmsk, &
+                                 label='extended_lmsk:',default=.true.,rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    write(msgString,'(a,f8.1)')'Model configure found with extended_lmsk = ',extended_lmsk
     call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
 
     call ESMF_ConfigGetAttribute(config=cf, &

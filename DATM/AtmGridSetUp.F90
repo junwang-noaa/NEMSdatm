@@ -4,7 +4,7 @@ subroutine AtmGridSetUp(grid,petCnt,gridname,tag,rc)
 
   use ESMF
   use AtmInternalFields, only : lPet, iatm, jatm, dirpath, cdate0, filename_base
-  use AtmInternalFields, only : AtmIndexType
+  use AtmInternalFields, only : AtmIndexType, extended_lmsk
 
   use AtmGridUtils
 
@@ -184,10 +184,8 @@ subroutine AtmGridSetUp(grid,petCnt,gridname,tag,rc)
   ! Add mask 
   !-------------------------------------------------------------------------------------
 
-  do lde = 0,localDECount-1
-
   ! retrieve a pointer for the mask
-  call ESMF_GridGetItem(grid, localDE=lde,&
+  call ESMF_GridGetItem(grid, localDE=0,&
                         staggerloc=ESMF_STAGGERLOC_CENTER, &
                         itemFlag=ESMF_GRIDITEM_MASK, &
                         farrayPtr=i4Ptr, rc=rc)
@@ -198,40 +196,33 @@ subroutine AtmGridSetUp(grid,petCnt,gridname,tag,rc)
 
   !fill the value using the landsfc mask
   i4Ptr = 0
-   do j = lbound(i4Ptr,2),ubound(i4Ptr,2)
+  do j = lbound(i4Ptr,2),ubound(i4Ptr,2)
     do i = lbound(i4Ptr,1),ubound(i4Ptr,1)
-     if(landsfc(i,j) .eq. 1.0)i4Ptr(i,j) = int(landsfc(i,j))
+     if (nint(landsfc(i,j)) == 1) then
+       i4Ptr(i,j) = nint(landsfc(i,j))
+     endif
+     if(extended_lmsk) then
+ 
+       if (nint(landsfc(i,j)) == 0) then
+         if (i > lbound(i4Ptr,1)) then
+           if(nint(landsfc(i-1,j)) == 1) i4Ptr(i,j) = 1
+         endif
+         if (i < ubound(i4Ptr,1)) then
+           if(nint(landsfc(i+1,j)) == 1) i4Ptr(i,j) = 1
+         endif
+         if (j > lbound(i4Ptr,2)) then
+           if(nint(landsfc(i,j-1)) == 1) i4Ptr(i,j) = 1
+         endif
+         if (i < ubound(i4Ptr,2)) then
+           if(nint(landsfc(i,j+1)) == 1) i4Ptr(i,j) = 1
+         endif
+       endif
+
+     endif
+
     enddo
-   enddo
+  enddo
 
-  ! get an array from the grid to set the mask
-  call ESMF_GridGetItem(grid, &
-                        staggerloc=ESMF_STAGGERLOC_CENTER, &
-                        itemFlag=ESMF_GRIDITEM_MASK, &
-                        array=array2d, rc=rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
-
-  ! a pointer to the array on this DE
-  call ESMF_ArrayGet(array2d, farrayPtr=i4Ptr, localDE=lde, rc = rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
-
-  ! Set the mask value in the grid
-  call ESMF_GridSetItem(grid, &
-                        itemFlag=ESMF_GRIDITEM_MASK, &
-                        staggerloc=ESMF_STAGGERLOC_CENTER, &
-                        array=array2d, rc=rc)
-  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-    line=__LINE__, &
-    file=__FILE__)) &
-    return  ! bail out
-
-  enddo !lde
   !-------------------------------------------------------------------------------------
   ! Write coords and mask to file
   !-------------------------------------------------------------------------------------
